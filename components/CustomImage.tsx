@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { cn } from "@/lib/utlis";
+import { useEffect, useRef, useState } from "react";
 
 type CustomImageProps = {
   src: string;
@@ -20,6 +21,36 @@ const CustomImage = ({
   className,
   index,
 }: CustomImageProps) => {
+  const [isVisible, setIsVisible] = useState<boolean>(false);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setIsVisible(true);
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      {
+        rootMargin: "100px",
+        threshold: 0.1,
+      }
+    );
+
+    if (imageRef.current) {
+      observer.observe(imageRef.current);
+    }
+
+    return () => {
+      if (imageRef.current) {
+        observer.unobserve(imageRef.current);
+      }
+    };
+  }, []);
+
   return (
     <Image
       src={src}
@@ -27,7 +58,7 @@ const CustomImage = ({
       width={width}
       height={height}
       className={cn(
-        "h-full w-full object-cover rounded-lg hover:cursor-pointer transition-all ease-in-out duration-[500ms]",
+        "h-full w-full object-cover hover:cursor-pointer transition-all ease-in-out duration-[500ms]",
         className || ""
       )}
       data-index={index}
