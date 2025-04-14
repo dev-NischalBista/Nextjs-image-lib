@@ -1,8 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { cn } from "@/lib/utlis";
-import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 
 type CustomImageProps = {
   src: string;
@@ -21,40 +20,10 @@ const CustomImage = ({
   className,
   index,
 }: CustomImageProps) => {
-  const [isVisible, setIsVisible] = useState<boolean>(false);
-  const imageRef = useRef<HTMLImageElement | null>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setIsVisible(true);
-            observer.unobserve(entry.target);
-          }
-        });
-      },
-      {
-        rootMargin: "100px",
-        threshold: 0.1,
-      }
-    );
-
-    if (imageRef.current) {
-      observer.observe(imageRef.current);
-    }
-
-    return () => {
-      if (imageRef.current) {
-        observer.unobserve(imageRef.current);
-      }
-    };
-  }, []);
-
   return (
     <Image
       src={src}
-      alt={alt}
+      alt={alt || "library-image"}
       width={width}
       height={height}
       className={cn(

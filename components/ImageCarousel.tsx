@@ -6,36 +6,68 @@ import {
   FaAngleLeft,
   FaAngleRight,
   FaArrowDown,
-  FaDownload,
   FaShare,
-  FaSquare,
   FaX,
 } from "react-icons/fa6";
-import { Image } from "@/types/Image.entity";
-import CustomButton from "./CustomButton";
+import { UnsplashPhotoResponse } from "@/types/Image.entity";
+import { AnimatePresence, motion } from "motion/react";
+import { wrap } from "motion";
+import Image from "next/image";
+
+const variants = {
+  enter: (direction: number) => {
+    return {
+      x: direction > 0 ? 1000 : -1000,
+      opacity: 0,
+    };
+  },
+  center: {
+    zIndex: 1,
+    x: 0,
+    opacity: 1,
+  },
+  exit: (direction: number) => {
+    return {
+      zIndex: 0,
+      x: direction < 0 ? 1000 : -1000,
+      opacity: 0,
+    };
+  },
+};
+
+const swipeConfidenceThreshold = 10000;
+const swipePower = (offset: number, velocity: number) => {
+  return Math.abs(offset) * velocity;
+};
 
 const ImageCarousel = ({
   images,
-  index,
   handleCarousel,
 }: {
-  images: Image[];
+  images: UnsplashPhotoResponse[];
   index: number;
   handleCarousel: () => void;
 }) => {
-  const [imageIndex, setImageIndex] = useState<number>(index);
   const clickTimeout = useRef<NodeJS.Timeout | null>(null);
   const lastClickTime = useRef<number>(0);
 
+  const [[page, direction], setPage] = useState([0, 0]);
+
+  const imageIndex = wrap(0, images.length, page);
+
+  const paginate = (newDirection: number) => {
+    setPage([page + newDirection, newDirection]);
+  };
+
   const handlePrev = () => {
     handleDebounceClick(() => {
-      setImageIndex(imageIndex === 0 ? images.length - 1 : imageIndex - 1);
+      paginate(-1);
     });
   };
 
   const handleNext = () => {
     handleDebounceClick(() => {
-      setImageIndex((imageIndex + 1) % images.length);
+      paginate(1);
     });
   };
 
@@ -49,20 +81,20 @@ const ImageCarousel = ({
 
     clickTimeout.current = setTimeout(() => {
       callback();
-      lastClickTime;
+      lastClickTime.current = Date.now();
     }, 300);
   };
 
   const handleImageDownload = async () => {
     try {
-      const imageUrl = images[imageIndex].url;
+      const imageUrl = images[imageIndex].urls.regular;
       const imageResponse = await fetch(imageUrl);
       const blob = await imageResponse.blob();
       const url = window.URL.createObjectURL(blob);
 
       const a = document.createElement("a");
       a.href = url;
-      a.download = images[imageIndex].title || "downloaded-image";
+      a.download = images[imageIndex].alt_description || "downloaded-image";
       document.body.appendChild(a);
       a.click();
 
@@ -75,15 +107,19 @@ const ImageCarousel = ({
 
   const handleImageLink = () => {
     try {
-      const imageUrl = images[imageIndex].url;
+      const imageUrl = images[imageIndex].urls.regular;
 
       if (!imageUrl) {
         return;
       }
 
       window.open(imageUrl, "_blank");
-    } catch (error) {
-      alert("Image Url not found!");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error(error.message);
+      } else {
+        console.error("An unknown error occurred.");
+      }
     }
   };
 
@@ -102,41 +138,83 @@ const ImageCarousel = ({
     <div className="fixed inset-0 max-h-full w-full bg-black/70 backdrop-blur-lg z-10 overflow-hidden">
       <div className="h-full w-full px-32">
         <div className="relative h-full flex items-center gap-4">
-          <CustomButton
-            icon={<FaAngleLeft />}
-            className="absolute top-1/2 left-4 transform -translate-y-1/2 z-10 !text-lg !p-4"
+          <button
+            className="absolute top-1/2 left-4 transform -translate-y-1/2 z-10 !text-lg !p-4 hover:bg-black/50 hover:rounded-full hover:p-6"
             onClick={handlePrev}
-          />
+          >
+            <FaAngleLeft />
+          </button>
 
           <div className="h-full w-full overflow-hidden">
             <div className="relative h-full">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/60 pointer-events-none z-10" />
               {images && (
-                <CustomImage
-                  src={images[imageIndex].url}
-                  alt={images[imageIndex].title}
-                  width={240}
-                  height={240}
-                  index={imageIndex}
-                  className="brightness-110"
-                />
+                <AnimatePresence initial={false} custom={direction}>
+                  <motion.div
+                    key={page}
+                    custom={direction}
+                    variants={variants}
+                    initial="enter"
+                    animate="center"
+                    exit="exit"
+                    transition={{
+                      x: { type: "spring", stiffness: 300, damping: 30 },
+                      opacity: { duration: 0.2 },
+                    }}
+                    drag="x"
+                    dragConstraints={{ left: 0, right: 0 }}
+                    dragElastic={1}
+                    onDragEnd={(e, { offset, velocity }) => {
+                      const swipe = swipePower(offset.x, velocity.x);
+
+                      if (swipe < -swipeConfidenceThreshold) {
+                        paginate(1);
+                      } else if (swipe > swipeConfidenceThreshold) {
+                        paginate(-1);
+                      }
+                    }}
+                  >
+                    <Image
+                      src={images[imageIndex].urls.full}
+                      alt={images[imageIndex].alt_description}
+                      width={240}
+                      height={240}
+                      className="brightness-110 w-full h-full object-cover"
+                    />
+                  </motion.div>
+                </AnimatePresence>
               )}
+
               <div className="absolute top-0 left-0 w-full flex justify-between px-4 py-4 z-[100]">
-                <CustomButton onClick={handleCarousel} icon={<FaX />} />
+                <button
+                  onClick={handleCarousel}
+                  className="hover:bg-black/50 hover:rounded-full p-2"
+                >
+                  <FaX />
+                </button>
                 <div className="flex gap-6 items-center">
-                  <CustomButton icon={<FaShare />} onClick={handleImageLink} />
-                  <CustomButton
-                    icon={<FaArrowDown />}
+                  <button
+                    onClick={handleImageLink}
+                    className="hover:bg-black/50 hover:rounded-full p-2"
+                  >
+                    <FaShare />
+                  </button>
+                  <button
                     onClick={handleImageDownload}
-                  />
+                    className="hover:bg-black/50 hover:rounded-full p-2"
+                  >
+                    <FaArrowDown />
+                  </button>
                 </div>
               </div>
             </div>
           </div>
-          <CustomButton
-            icon={<FaAngleRight />}
-            className="absolute top-1/2 right-4 transform -translate-y-1/2 !text-lg !p-4"
+          <button
+            className="absolute top-1/2 right-4 transform -translate-y-1/2 !text-lg !p-4 hover:bg-black/50 hover:rounded-full hover:p-6"
             onClick={handleNext}
-          />
+          >
+            <FaAngleRight />
+          </button>
         </div>
         <div
           className="absolute bottom-0 left-0 w-full flex justify-center z-[50] py-6"
@@ -145,12 +223,12 @@ const ImageCarousel = ({
             const imgIndex = Number(target.dataset.index);
 
             if (!isNaN(imgIndex)) {
-              setImageIndex(imgIndex);
+              setPage([imgIndex, 1000]);
             }
           }}
         >
           <div className="relative w-[84px] aspect-[3/2] flex items-center">
-            {images.map((item: Image, idx: number) => (
+            {images.map((item: UnsplashPhotoResponse, idx: number) => (
               <div
                 style={{
                   left:
@@ -164,8 +242,8 @@ const ImageCarousel = ({
                 }`}
               >
                 <CustomImage
-                  src={item.url}
-                  alt={item.title}
+                  src={item.urls.regular}
+                  alt={item.alt_description}
                   width={180}
                   height={120}
                   className={`${
